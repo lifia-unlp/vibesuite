@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VibeBrace Studio</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ── Toolbar ─────────────────────────────────────────────── -->
+  <header class="toolbar">
+    <span class="toolbar__title">VibeBrace Studio</span>
+
+    <div class="toolbar__group">
+      <select id="portSelect">
+        <option value="">— puerto —</option>
+      </select>
+      <button id="btnListPorts">Listar puertos</button>
+      <button id="btnConnect">Conectar</button>
+      <span id="statusIndicator" class="status status--off">●</span>
+    </div>
+
+    <div class="toolbar__group">
+      <button id="btnSend" disabled>▶ Enviar y ejecutar</button>
+      <button id="btnStop" disabled>■ Stop</button>
+    </div>
+
+    <div class="toolbar__group">
+      <button id="btnSave">Guardar</button>
+      <button id="btnLoad">Cargar</button>
+      <input type="file" id="fileInput" accept=".json" style="display:none">
+    </div>
+  </header>
+
+  <!-- ── Área principal ──────────────────────────────────────── -->
+  <main class="main">
+
+    <!-- Timeline -->
+    <section class="timeline-section">
+      <h2 class="section-title">Secuencia</h2>
+      <canvas id="timelineCanvas" width="800" height="120"></canvas>
+      <p class="hint">El canvas se dibuja automáticamente cuando hay pasos en la lista.</p>
+    </section>
+
+    <!-- Lista de pasos -->
+    <section class="steps-section">
+      <h2 class="section-title">Pasos <span id="stepCount">(0)</span></h2>
+      <ul id="stepList" class="step-list">
+        <li class="step-list__empty">No hay pasos. Agregá uno con el formulario.</li>
+      </ul>
+    </section>
+
+    <!-- Formulario para agregar pasos -->
+    <section class="form-section">
+      <h2 class="section-title">Agregar paso</h2>
+
+      <div class="form-row">
+        <label for="stepKind">Tipo</label>
+        <select id="stepKind">
+          <option value="S">S — Step simple</option>
+          <option value="RAMP">RAMP — Rampa</option>
+          <option value="TREMOLO">TREMOLO — Trémolo</option>
+          <option value="XFADE">XFADE — Crossfade</option>
+        </select>
+      </div>
+
+      <!-- Parámetros dinámicos según el tipo seleccionado -->
+      <div id="paramsS" class="params-group">
+        <div class="form-row">
+          <label for="s_d1">Motor 1 (0–255)</label>
+          <input type="number" id="s_d1" min="0" max="255" value="200">
+        </div>
+        <div class="form-row">
+          <label for="s_d2">Motor 2 (0–255)</label>
+          <input type="number" id="s_d2" min="0" max="255" value="200">
+        </div>
+        <div class="form-row">
+          <label for="s_ms">Duración (ms)</label>
+          <input type="number" id="s_ms" min="5" max="20000" value="500">
+        </div>
+      </div>
+
+      <div id="paramsRAMP" class="params-group" style="display:none">
+        <div class="form-row">
+          <label for="ramp_m">Motor (1/2/3)</label>
+          <input type="number" id="ramp_m" min="1" max="3" value="3">
+        </div>
+        <div class="form-row">
+          <label for="ramp_d0">Intensidad inicial</label>
+          <input type="number" id="ramp_d0" min="0" max="255" value="0">
+        </div>
+        <div class="form-row">
+          <label for="ramp_d1">Intensidad final</label>
+          <input type="number" id="ramp_d1" min="0" max="255" value="200">
+        </div>
+        <div class="form-row">
+          <label for="ramp_ms">Duración total (ms)</label>
+          <input type="number" id="ramp_ms" min="5" max="20000" value="1000">
+        </div>
+        <div class="form-row">
+          <label for="ramp_steps">Pasos</label>
+          <input type="number" id="ramp_steps" min="2" max="48" value="16">
+        </div>
+      </div>
+
+      <div id="paramsTREMOLO" class="params-group" style="display:none">
+        <div class="form-row">
+          <label for="tr_m">Motor (1/2/3)</label>
+          <input type="number" id="tr_m" min="1" max="3" value="1">
+        </div>
+        <div class="form-row">
+          <label for="tr_base">Base (0–255)</label>
+          <input type="number" id="tr_base" min="0" max="255" value="120">
+        </div>
+        <div class="form-row">
+          <label for="tr_depth">Depth (0–255)</label>
+          <input type="number" id="tr_depth" min="0" max="255" value="80">
+        </div>
+        <div class="form-row">
+          <label for="tr_rate">Rate (Hz)</label>
+          <input type="number" id="tr_rate" min="1" max="50" value="5">
+        </div>
+        <div class="form-row">
+          <label for="tr_ms">Duración (ms)</label>
+          <input type="number" id="tr_ms" min="50" max="5000" value="1000">
+        </div>
+      </div>
+
+      <div id="paramsXFADE" class="params-group" style="display:none">
+        <div class="form-row">
+          <label for="xf_duty">Intensidad (0–255)</label>
+          <input type="number" id="xf_duty" min="0" max="255" value="200">
+        </div>
+        <div class="form-row">
+          <label for="xf_ms">Duración total (ms)</label>
+          <input type="number" id="xf_ms" min="5" max="20000" value="1000">
+        </div>
+        <div class="form-row">
+          <label for="xf_steps">Pasos</label>
+          <input type="number" id="xf_steps" min="2" max="48" value="12">
+        </div>
+      </div>
+
+      <div class="form-row form-row--actions">
+        <button id="btnAddStep">+ Agregar paso</button>
+        <button id="btnClearSteps">Limpiar lista</button>
+      </div>
+    </section>
+
+    <!-- Log de comunicación -->
+    <section class="log-section">
+      <h2 class="section-title">Consola</h2>
+      <pre id="log" class="log"></pre>
+      <button id="btnClearLog">Limpiar consola</button>
+    </section>
+
+  </main>
+
+  <script src="pattern.js"></script>
+  <script src="editor.js"></script>
+</body>
+</html>
