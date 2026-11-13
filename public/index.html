@@ -114,6 +114,7 @@
           <input type="number" id="tr_base" min="0" max="255" value="120">
         </div>
         <div class="form-row">
+
           <label for="tr_depth">Depth (0–255)</label>
           <input type="number" id="tr_depth" min="0" max="255" value="80">
         </div>
@@ -145,6 +146,18 @@
       <div class="form-row form-row--actions">
         <button id="btnAddStep">+ Agregar paso</button>
         <button id="btnClearSteps">Limpiar lista</button>
+      </div>
+
+      <!-- Biblioteca de presets -->
+      <div class="presets-section">
+        <h2 class="section-title">Biblioteca de presets</h2>
+        <div class="form-row">
+          <input type="text" id="presetName" placeholder="Nombre del preset">
+          <button id="btnSavePreset">Guardar preset</button>
+        </div>
+        <ul id="presetList" class="step-list">
+          <li class="step-list__empty">Todavía no hay presets guardados.</li>
+        </ul>
       </div>
     </section>
 

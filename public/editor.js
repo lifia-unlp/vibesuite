@@ -1,22 +1,14 @@
+
 /**
  * editor.js — Lógica de la interfaz de VibeBrace Studio
- * 
- * Responsabilidades:
- *   - Estado del patrón (array de pasos)
- *   - Comunicación con el servidor (fetch + WebSocket)
- *   - Renderizado de la lista de pasos
- *   - Dibujo del timeline en el canvas
- *   - Respuesta a eventos del usuario
- * 
- * Depende de pattern.js (debe cargarse antes en index.html).
  */
 
 'use strict';
 
 // ─── Estado ───────────────────────────────────────────────────────────────────
 
-let steps     = [];      // array de pasos del patrón actual
-let connected = false;   // true si hay conexión activa con el Arduino
+let steps = [];
+let connected = false;
 
 // ─── Referencias al DOM ───────────────────────────────────────────────────────
 
@@ -39,6 +31,15 @@ const canvas          = document.getElementById('timelineCanvas');
 const ctx             = canvas.getContext('2d');
 const stepKindSelect  = document.getElementById('stepKind');
 
+// Elementos de la biblioteca de presets
+const presetNameInput = document.getElementById('presetName');
+const btnSavePreset   = document.getElementById('btnSavePreset');
+const presetList      = document.getElementById('presetList');
+
+const PRESETS_KEY = 'vibebrace-presets';
+
+let presets = [];
+
 // ─── Log ──────────────────────────────────────────────────────────────────────
 
 function log(message, type = 'info') {
@@ -49,7 +50,9 @@ function log(message, type = 'info') {
   logEl.scrollTop = logEl.scrollHeight;
 }
 
-btnClearLog.addEventListener('click', () => { logEl.innerHTML = ''; });
+btnClearLog.addEventListener('click', () => {
+  logEl.innerHTML = '';
+});
 
 // ─── WebSocket ────────────────────────────────────────────────────────────────
 
@@ -87,10 +90,11 @@ ws.addEventListener('close', () => {
 
 btnListPorts.addEventListener('click', async () => {
   try {
-    const res  = await fetch('/ports');
+    const res = await fetch('/ports');
     const data = await res.json();
 
     portSelect.innerHTML = '<option value="">— puerto —</option>';
+
     for (const p of data.ports) {
       const opt = document.createElement('option');
       opt.value = p;
@@ -106,7 +110,6 @@ btnListPorts.addEventListener('click', async () => {
 
 btnConnect.addEventListener('click', async () => {
   if (connected) {
-    // Desconectar
     try {
       await fetch('/disconnect', { method: 'POST' });
       setConnected(false);
@@ -118,17 +121,19 @@ btnConnect.addEventListener('click', async () => {
   }
 
   const port = portSelect.value;
+
   if (!port) {
     log('Seleccioná un puerto antes de conectar', 'error');
     return;
   }
 
   try {
-    const res  = await fetch('/connect', {
-      method:  'POST',
+    const res = await fetch('/connect', {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ port })
+      body: JSON.stringify({ port })
     });
+
     const data = await res.json();
 
     if (data.error) {
@@ -144,15 +149,18 @@ btnConnect.addEventListener('click', async () => {
 
 function setConnected(value) {
   connected = value;
-  btnConnect.textContent   = value ? 'Desconectar' : 'Conectar';
+  btnConnect.textContent = value ? 'Desconectar' : 'Conectar';
   statusIndicator.className = value ? 'status status--on' : 'status status--off';
-  btnSend.disabled          = !value || steps.length === 0;
-  btnStop.disabled          = !value;
+  btnSend.disabled = !value || steps.length === 0;
+  btnStop.disabled = !value;
 }
 
 function setPlaying(value) {
-  statusIndicator.className = value ? 'status status--busy' : (connected ? 'status status--on' : 'status status--off');
-  btnSend.disabled          = value || !connected || steps.length === 0;
+  statusIndicator.className = value
+    ? 'status status--busy'
+    : (connected ? 'status status--on' : 'status status--off');
+
+  btnSend.disabled = value || !connected || steps.length === 0;
 }
 
 // ─── Enviar patrón ────────────────────────────────────────────────────────────
@@ -169,11 +177,12 @@ btnSend.addEventListener('click', async () => {
   setPlaying(true);
 
   try {
-    const res  = await fetch('/send', {
-      method:  'POST',
+    const res = await fetch('/send', {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ lines })
+      body: JSON.stringify({ lines })
     });
+
     const data = await res.json();
 
     if (data.error) {
@@ -189,10 +198,11 @@ btnSend.addEventListener('click', async () => {
 btnStop.addEventListener('click', async () => {
   try {
     await fetch('/send', {
-      method:  'POST',
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ lines: ['STOP'] })
+      body: JSON.stringify({ lines: ['STOP'] })
     });
+
     log('→ STOP', 'sent');
     setPlaying(false);
   } catch (err) {
@@ -207,6 +217,7 @@ btnAddStep.addEventListener('click', () => {
   const step = { id: generateId(), kind, params };
 
   const error = validateStep(step);
+
   if (error) {
     log(`Parámetro inválido: ${error}`, 'error');
     return;
@@ -233,7 +244,7 @@ function deleteStep(id) {
 
 function renderStepList() {
   stepCount.textContent = `(${steps.length})`;
-  btnSend.disabled      = !connected || steps.length === 0;
+  btnSend.disabled = !connected || steps.length === 0;
 
   if (steps.length === 0) {
     stepList.innerHTML = '<li class="step-list__empty">No hay pasos. Agregá uno con el formulario.</li>';
@@ -241,86 +252,233 @@ function renderStepList() {
   }
 
   stepList.innerHTML = '';
+
   steps.forEach((step) => {
     const li = document.createElement('li');
     li.className = 'step-item';
-    li.innerHTML = `
-      <span class="step-item__kind">${step.kind}</span>
-      <span class="step-item__params">${stepToSerial(step)}</span>
-      <button class="step-item__delete" title="Eliminar">×</button>
-    `;
-    li.querySelector('.step-item__delete').addEventListener('click', () => deleteStep(step.id));
+
+    const kind = document.createElement('span');
+    kind.className = 'step-item__kind';
+    kind.textContent = step.kind;
+
+    const params = document.createElement('span');
+    params.className = 'step-item__params';
+    params.textContent = stepToSerial(step);
+
+    const deleteButton = document.createElement('button');
+    deleteButton.className = 'step-item__delete';
+    deleteButton.title = 'Eliminar';
+    deleteButton.textContent = '×';
+    deleteButton.addEventListener('click', () => deleteStep(step.id));
+
+    li.append(kind, params, deleteButton);
     stepList.appendChild(li);
   });
 }
+
+// ─── Biblioteca de presets ────────────────────────────────────────────────────
+
+function cloneSteps(source) {
+  return JSON.parse(JSON.stringify(source));
+}
+
+function persistPresets() {
+  try {
+    localStorage.setItem(PRESETS_KEY, JSON.stringify(presets));
+    return true;
+  } catch (err) {
+    log(`No se pudieron guardar los presets: ${err.message}`, 'error');
+    return false;
+  }
+}
+
+function restorePresets() {
+  try {
+    const saved = localStorage.getItem(PRESETS_KEY);
+
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      presets = Array.isArray(parsed) ? parsed : [];
+    }
+  } catch (err) {
+    presets = [];
+    log('No se pudieron recuperar los presets guardados.', 'error');
+  }
+
+  renderPresetList();
+}
+
+function renderPresetList() {
+  presetList.innerHTML = '';
+
+  if (presets.length === 0) {
+    const empty = document.createElement('li');
+    empty.className = 'step-list__empty';
+    empty.textContent = 'Todavía no hay presets guardados.';
+    presetList.appendChild(empty);
+    return;
+  }
+
+  presets.forEach((preset) => {
+    const li = document.createElement('li');
+    li.className = 'step-item';
+
+    const name = document.createElement('span');
+    name.className = 'step-item__kind';
+    name.textContent = preset.name;
+
+    const loadButton = document.createElement('button');
+    loadButton.textContent = 'Cargar';
+    loadButton.addEventListener('click', () => loadPreset(preset.id));
+
+    const deleteButton = document.createElement('button');
+    deleteButton.className = 'step-item__delete';
+    deleteButton.title = 'Eliminar preset';
+    deleteButton.textContent = '×';
+    deleteButton.addEventListener('click', () => deletePreset(preset.id));
+
+    li.append(name, loadButton, deleteButton);
+    presetList.appendChild(li);
+  });
+}
+
+function savePreset() {
+  const name = presetNameInput.value.trim();
+
+  if (!name) {
+    log('Escribí un nombre para el preset.', 'error');
+    presetNameInput.focus();
+    return;
+  }
+
+  if (steps.length === 0) {
+    log('Agregá al menos un paso antes de guardar un preset.', 'error');
+    return;
+  }
+
+  const preset = {
+    id: generateId(),
+    name,
+    steps: cloneSteps(steps),
+    savedAt: new Date().toISOString()
+  };
+
+  presets.push(preset);
+
+  if (persistPresets()) {
+    renderPresetList();
+    presetNameInput.value = '';
+    log(`Preset "${name}" guardado correctamente.`, 'info');
+  } else {
+    presets.pop();
+  }
+}
+
+function loadPreset(id) {
+  const preset = presets.find(item => item.id === id);
+
+  if (!preset) {
+    log('No se encontró ese preset.', 'error');
+    return;
+  }
+
+  steps = cloneSteps(preset.steps);
+  renderStepList();
+  drawTimeline();
+
+  log(`Preset "${preset.name}" cargado (${steps.length} pasos).`, 'info');
+}
+
+function deletePreset(id) {
+  const preset = presets.find(item => item.id === id);
+
+  if (!preset) return;
+
+  presets = presets.filter(item => item.id !== id);
+
+  if (persistPresets()) {
+    renderPresetList();
+    log(`Preset "${preset.name}" eliminado.`, 'info');
+  }
+}
+
+btnSavePreset.addEventListener('click', savePreset);
+
+presetNameInput.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    savePreset();
+  }
+});
 
 // ─── Formulario: mostrar/ocultar parámetros según tipo ───────────────────────
 
 stepKindSelect.addEventListener('change', () => {
   const kind = stepKindSelect.value;
-  document.getElementById('paramsS').style.display       = kind === 'S'       ? '' : 'none';
-  document.getElementById('paramsRAMP').style.display    = kind === 'RAMP'    ? '' : 'none';
-  document.getElementById('paramsTREMOLO').style.display = kind === 'TREMOLO' ? '' : 'none';
-  document.getElementById('paramsXFADE').style.display   = kind === 'XFADE'   ? '' : 'none';
+
+  document.getElementById('paramsS').style.display =
+    kind === 'S' ? '' : 'none';
+
+  document.getElementById('paramsRAMP').style.display =
+    kind === 'RAMP' ? '' : 'none';
+
+  document.getElementById('paramsTREMOLO').style.display =
+    kind === 'TREMOLO' ? '' : 'none';
+
+  document.getElementById('paramsXFADE').style.display =
+    kind === 'XFADE' ? '' : 'none';
 });
 
-// ─── Guardar / cargar ─────────────────────────────────────────────────────────
+// ─── Guardar / cargar archivos JSON ──────────────────────────────────────────
 
 btnSave.addEventListener('click', () => {
   const name = prompt('Nombre del patrón:', 'mi-patron') || 'mi-patron';
   const json = savePattern(name, steps);
   const blob = new Blob([json], { type: 'application/json' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href     = url;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+
+  a.href = url;
   a.download = `${name}.json`;
   a.click();
+
   URL.revokeObjectURL(url);
   log(`Patrón guardado como "${name}.json"`, 'info');
 });
 
-btnLoad.addEventListener('click', () => { fileInput.click(); });
+btnLoad.addEventListener('click', () => {
+  fileInput.click();
+});
 
 fileInput.addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
 
   const reader = new FileReader();
+
   reader.onload = (ev) => {
     try {
       const { name, steps: loaded } = loadPattern(ev.target.result);
       steps = loaded;
+
       renderStepList();
       drawTimeline();
+
       log(`Patrón "${name}" cargado (${steps.length} pasos)`, 'info');
     } catch (err) {
       log(`Error al cargar el archivo: ${err.message}`, 'error');
     }
   };
+
   reader.readAsText(file);
-  fileInput.value = ''; // permitir recargar el mismo archivo
+  fileInput.value = '';
 });
 
 // ─── Timeline (canvas) ────────────────────────────────────────────────────────
 
-/**
- * Dibuja el patrón como bloques de intensidad en el canvas.
- * 
- * Eje X: tiempo (ms), proporcional al ancho del canvas.
- * Eje Y: intensidad del motor (0–255), proporcional a la mitad del alto.
- * 
- * Carril superior: Motor 1 (azul)
- * Carril inferior: Motor 2 (rosa)
- * 
- * Esta es la versión mínima — solo muestra pasos tipo S.
- * Los pasos RAMP, TREMOLO y XFADE se muestran como bloques sólidos
- * con su intensidad promedio hasta que se implemente la visualización detallada.
- */
 function drawTimeline() {
   const W = canvas.width;
   const H = canvas.height;
 
-  // Limpiar
   ctx.fillStyle = '#0d0d1a';
   ctx.fillRect(0, 0, W, H);
 
@@ -332,72 +490,73 @@ function drawTimeline() {
     return;
   }
 
-  const totalMs   = estimateDurationMs(steps);
-  const laneH     = H / 2 - 4;  // alto de cada carril
-  const msToX     = (ms) => (ms / totalMs) * W;
+  const totalMs = estimateDurationMs(steps);
+  const laneH = H / 2 - 4;
+  const msToX = (ms) => (ms / totalMs) * W;
 
   let currentMs = 0;
 
   for (const step of steps) {
     const blockW = msToX(step.params.ms);
 
-    // Calcular intensidades para representar en el canvas
-    let d1 = 0, d2 = 0;
+    let d1 = 0;
+    let d2 = 0;
 
     switch (step.kind) {
       case 'S':
         d1 = step.params.d1;
         d2 = step.params.d2;
         break;
+
       case 'RAMP':
-        // Mostrar rampa como gradiente horizontal
-        d1 = step.params.m !== 2 ? (step.params.d0 + step.params.d1) / 2 : 0;
-        d2 = step.params.m !== 1 ? (step.params.d0 + step.params.d1) / 2 : 0;
+        d1 = step.params.m !== 2
+          ? (step.params.d0 + step.params.d1) / 2 : 0;
+        d2 = step.params.m !== 1
+          ? (step.params.d0 + step.params.d1) / 2 : 0;
         break;
+
       case 'TREMOLO':
-        d1 = step.params.m !== 2 ? step.params.base + step.params.depth / 2 : 0;
-        d2 = step.params.m !== 1 ? step.params.base + step.params.depth / 2 : 0;
+        d1 = step.params.m !== 2
+          ? step.params.base + step.params.depth / 2 : 0;
+        d2 = step.params.m !== 1
+          ? step.params.base + step.params.depth / 2 : 0;
         break;
+
       case 'XFADE':
         d1 = step.params.duty / 2;
         d2 = step.params.duty / 2;
         break;
     }
 
-    const x  = msToX(currentMs);
+    const x = msToX(currentMs);
     const h1 = (d1 / 255) * laneH;
     const h2 = (d2 / 255) * laneH;
 
-    // Motor 1 (carril superior, crece hacia arriba desde el centro)
     if (h1 > 0) {
       ctx.fillStyle = '#00b4d8cc';
       ctx.fillRect(x + 1, H / 2 - h1 - 2, blockW - 2, h1);
     }
 
-    // Motor 2 (carril inferior, crece hacia abajo desde el centro)
     if (h2 > 0) {
       ctx.fillStyle = '#f72585cc';
       ctx.fillRect(x + 1, H / 2 + 2, blockW - 2, h2);
     }
 
-    // Borde del bloque (separación visual)
     ctx.strokeStyle = '#ffffff22';
     ctx.strokeRect(x, 0, blockW, H);
 
     currentMs += step.params.ms;
   }
 
-  // Línea central
   ctx.strokeStyle = '#ffffff33';
-  ctx.lineWidth   = 1;
+  ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(0, H / 2);
   ctx.lineTo(W, H / 2);
   ctx.stroke();
 
-  // Etiqueta M1 / M2
   ctx.fillStyle = '#00b4d8';
-  ctx.font      = '11px system-ui';
+  ctx.font = '11px system-ui';
   ctx.textAlign = 'left';
   ctx.fillText('M1', 4, 14);
 
@@ -407,6 +566,8 @@ function drawTimeline() {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
+restorePresets();
 renderStepList();
 drawTimeline();
+
 log('VibeBrace Studio listo. Listá los puertos y conectá el Arduino.', 'info');
