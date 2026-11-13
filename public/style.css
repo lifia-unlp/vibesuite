@@ -282,3 +282,53 @@ button:disabled {
 .log .log--received { color: var(--color-ok); }
 .log .log--error    { color: var(--color-accent); }
 .log .log--info     { color: var(--color-text-dim); }
+
+/* ─── Biblioteca de presets ───────────────────────── */
+
+.presets-section {
+  border-top: 1px solid var(--color-border);
+  margin-top: 18px;
+  padding-top: 14px;
+}
+
+.presets-section .section-title {
+  color: var(--color-accent);
+}
+
+#presetName {
+  width: 100%;
+}
+
+#btnSavePreset {
+  width: 100%;
+  background: var(--color-accent2);
+  padding: 8px;
+}
+
+#btnSavePreset:hover:not(:disabled) {
+  background: var(--color-accent);
+}
+
+#presetList {
+  margin-top: 10px;
+  max-height: 220px;
+}
+
+#presetList .step-item {
+  flex-wrap: wrap;
+}
+
+#presetList .step-item__kind {
+  flex: 1;
+  min-width: 80px;
+  overflow-wrap: anywhere;
+}
+
+#presetList button:not(.step-item__delete) {
+  background: var(--color-border);
+  padding: 5px 10px;
+}
+
+#presetList button:not(.step-item__delete):hover {
+  background: var(--color-accent2);
+}
