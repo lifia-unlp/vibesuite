@@ -473,6 +473,52 @@ fileInput.addEventListener('change', (e) => {
   fileInput.value = '';
 });
 
+// ─── Exportar código Arduino ─────────────────────────
+
+const btnExportArduino = document.getElementById('btnExportArduino');
+const exportModal = document.getElementById('exportModal');
+const exportFileName = document.getElementById('exportFileName');
+const btnCancelExport = document.getElementById('btnCancelExport');
+const btnConfirmExport = document.getElementById('btnConfirmExport');
+
+btnExportArduino.addEventListener('click', () => {
+  if (steps.length === 0) {
+    log('No hay pasos para exportar', 'error');
+    return;
+  }
+
+  exportFileName.value = 'mi-patron';
+  exportModal.style.display = 'flex';
+  exportFileName.focus();
+  exportFileName.select();
+});
+
+btnCancelExport.addEventListener('click', () => {
+  exportModal.style.display = 'none';
+});
+
+btnConfirmExport.addEventListener('click', () => {
+  const name = exportFileName.value.trim() || 'mi-patron';
+
+  try {
+    const code = patternToArduinoCode(name, steps);
+    const blob = new Blob([code], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+
+    a.href = url;
+    a.download = `${name.replace(/[\\/:*?"<>|]/g, '_')}.ino`;
+    a.click();
+
+    URL.revokeObjectURL(url);
+    exportModal.style.display = 'none';
+    log(`Código Arduino exportado como "${a.download}"`, 'info');
+  } catch (err) {
+    log(`Error al exportar Arduino: ${err.message}`, 'error');
+  }
+});
+
+
 // ─── Timeline (canvas) ────────────────────────────────────────────────────────
 
 function drawTimeline() {

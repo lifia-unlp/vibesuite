@@ -238,3 +238,47 @@ function readFormParams() {
       throw new Error(`Tipo desconocido: "${kind}"`);
   }
 }
+
+/**
+ * Genera código Arduino (.ino) para reproducir una secuencia.
+ *
+ * @param {string} name - Nombre del patrón.
+ * @param {object[]} steps - Pasos de la secuencia.
+ * @returns {string} Código C++ compatible con Arduino IDE.
+ */
+function patternToArduinoCode(name, steps) {
+  if (!Array.isArray(steps)) {
+    throw new Error('Los pasos deben ser un array');
+  }
+
+  const safeName = String(name || 'Sin nombre')
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/[\r\n]/g, ' ');
+
+  const commands = patternToLines(steps);
+  const duration = estimateDurationMs(steps);
+  const lines = [];
+
+  lines.push(`// Patrón: "${safeName}"`);
+  lines.push('// Generado por VibeBrace Studio');
+  lines.push('');
+  lines.push('void setup() {');
+  lines.push('  Serial.begin(115200);');
+  lines.push('}');
+  lines.push('');
+  lines.push('void loop() {');
+  lines.push('  // Enviar secuencia');
+
+  for (const command of commands) {
+    lines.push(`  Serial.println("${command}");`);
+    lines.push('  delay(20);');
+  }
+
+  lines.push('');
+  lines.push(`  // Esperar a que termine (estimado: ${duration} ms)`);
+  lines.push(`  delay(${duration + 200});`);
+  lines.push('}');
+
+  return lines.join('\n') + '\n';
+}
