@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "name": "Tremolo alternado",
+  "savedAt": "2026-11-17T10:00:00.000Z",
+  "steps": [
+    {
+      "kind": "TREMOLO",
+      "params": {
+        "m": 1,
+        "base": 100,
+        "depth": 40,
+        "rate": 5,
+        "ms": 1000
+      }
+    },
+    {
+      "kind": "TREMOLO",
+      "params": {
+        "m": 2,
+        "base": 100,
+        "depth": 40,
+        "rate": 5,
+        "ms": 1000
+      }
+    }
+  ]
+}

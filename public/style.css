@@ -412,3 +412,30 @@ button:disabled {
 #btnConfirmExport:hover {
   background: #48d8f0;
 }
+
+/* Diseño adaptable para pantallas angostas */
+.main {
+  grid-template-columns: minmax(0, 1fr) 280px;
+}
+
+@media (max-width: 850px) {
+  .main {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "timeline"
+      "form"
+      "steps"
+      "log";
+  }
+}
+
+.timeline-section,
+.steps-section,
+.log-section,
+.form-section {
+  min-width: 0;
+}
+
+#timelineCanvas {
+  max-width: 100%;
+}

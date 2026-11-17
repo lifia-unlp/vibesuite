@@ -1,54 +1,41 @@
+
 /**
  * VibeBrace Studio — Servidor
- * 
- * Corre en Node.js. Expone una API HTTP + WebSocket para que
- * el browser pueda comunicarse con el Arduino por USB.
- * 
- * Endpoints HTTP:
- *   GET  /ports          → lista de puertos disponibles
- *   POST /connect        → conectar al Arduino
- *   POST /disconnect     → desconectar
- *   POST /send           → enviar líneas de comandos
- * 
- * WebSocket (ws://localhost:3000):
- *   El servidor empuja mensajes cuando el Arduino responde:
- *   DONE, ACK RUN, ACK CLR, ACK STOP, ERR <token>
+ *
+ * API HTTP + WebSocket para comunicarse con Arduino por USB.
  */
 
-const express    = require('express');
-const http       = require('http');
-const path       = require('path');
+const express = require('express');
+const http = require('http');
+const path = require('path');
 const { WebSocketServer } = require('ws');
-const { SerialPort }      = require('serialport');
-const { ReadlineParser }  = require('@serialport/parser-readline');
+const { SerialPort } = require('serialport');
+const { ReadlineParser } = require('@serialport/parser-readline');
 
-// ─── Configuración ────────────────────────────────────────────────────────────
+// ─── Configuración ────────────────────────────────────────────
 
-const PORT      = 3000;
+const PORT = 3000;
 const BAUD_RATE = 115200;
-
-// Delay entre líneas enviadas al Arduino (ms).
-// El buffer serial del Nano es de 64 bytes; sin delay, líneas largas
-// enviadas en ráfaga pueden colisionar.
 const LINE_DELAY_MS = 8;
 
-// ─── Estado del servidor ──────────────────────────────────────────────────────
+// ─── Estado del servidor ───────────────────────────────────────
 
-let serialPort = null;   // instancia activa de SerialPort, o null si no hay conexión
-let wsClients  = new Set(); // browsers conectados por WebSocket
+let serialPort = null;
+let wsClients = new Set();
 
-// ─── Express ──────────────────────────────────────────────────────────────────
+// ─── Express ──────────────────────────────────────────────────
 
 const app = express();
+
 app.use(express.json());
 
-// Servir los archivos estáticos de la interfaz web (carpeta ../public/)
+// Servir los archivos de la interfaz web.
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-// ─── WebSocket ────────────────────────────────────────────────────────────────
+// ─── WebSocket ────────────────────────────────────────────────
 
 const server = http.createServer(app);
-const wss    = new WebSocketServer({ server });
+const wss = new WebSocketServer({ server });
 
 wss.on('connection', (ws) => {
   wsClients.add(ws);
@@ -60,7 +47,6 @@ wss.on('connection', (ws) => {
   });
 });
 
-// Enviar un mensaje de texto a todos los browsers conectados
 function broadcast(message) {
   for (const ws of wsClients) {
     if (ws.readyState === ws.OPEN) {
@@ -69,17 +55,17 @@ function broadcast(message) {
   }
 }
 
-// ─── Endpoints HTTP ───────────────────────────────────────────────────────────
+// ─── Endpoints HTTP ───────────────────────────────────────────
 
 /**
  * GET /ports
- * Lista los puertos serie disponibles en el sistema.
- * Responde: { ports: ["/dev/ttyUSB0", "COM3", ...] }
+ * Lista los puertos serie disponibles.
  */
 app.get('/ports', async (req, res) => {
   try {
-    const all   = await SerialPort.list();
+    const all = await SerialPort.list();
     const ports = all.map(p => p.path);
+
     res.json({ ports });
   } catch (err) {
     console.error('[/ports]', err.message);
@@ -89,31 +75,38 @@ app.get('/ports', async (req, res) => {
 
 /**
  * POST /connect
- * Body: { "port": "/dev/ttyUSB0" }
- * Abre la conexión al Arduino en ese puerto.
- * Responde: { ok: true } o { error: "..." }
+ * Conecta con Arduino.
  */
 app.post('/connect', (req, res) => {
   const portPath = req.body.port;
 
   if (!portPath) {
-    return res.status(400).json({ error: 'Falta el campo "port"' });
+    return res.status(400).json({
+      error: 'Falta el campo "port"'
+    });
   }
 
   if (serialPort && serialPort.isOpen) {
-    return res.status(400).json({ error: 'Ya hay una conexión activa. Desconectá primero.' });
+    return res.status(400).json({
+      error: 'Ya hay una conexión activa. Desconectá primero.'
+    });
   }
 
   try {
-    serialPort = new SerialPort({ path: portPath, baudRate: BAUD_RATE });
+    serialPort = new SerialPort({
+      path: portPath,
+      baudRate: BAUD_RATE
+    });
 
-    // Parser que emite un evento por cada línea terminada en \n
-    const parser = serialPort.pipe(new ReadlineParser({ delimiter: '\n' }));
+    const parser = serialPort.pipe(
+      new ReadlineParser({ delimiter: '\n' })
+    );
 
     parser.on('data', (line) => {
       const msg = line.trim();
+
       console.log(`[Arduino →] ${msg}`);
-      broadcast(msg); // reenviar al browser por WebSocket
+      broadcast(msg);
     });
 
     serialPort.on('error', (err) => {
@@ -128,6 +121,7 @@ app.post('/connect', (req, res) => {
     });
 
     console.log(`[Serial] Conectado a ${portPath} @ ${BAUD_RATE} baud`);
+
     res.json({ ok: true });
 
   } catch (err) {
@@ -138,12 +132,13 @@ app.post('/connect', (req, res) => {
 
 /**
  * POST /disconnect
- * Cierra la conexión serial activa.
- * Responde: { ok: true } o { error: "..." }
+ * Desconecta Arduino.
  */
 app.post('/disconnect', (req, res) => {
   if (!serialPort || !serialPort.isOpen) {
-    return res.status(400).json({ error: 'No hay conexión activa' });
+    return res.status(400).json({
+      error: 'No hay conexión activa'
+    });
   }
 
   serialPort.close((err) => {
@@ -151,56 +146,97 @@ app.post('/disconnect', (req, res) => {
       console.error('[/disconnect]', err.message);
       return res.status(500).json({ error: err.message });
     }
+
     res.json({ ok: true });
   });
 });
 
 /**
  * POST /send
- * Body: { "lines": ["CLR", "S,200,200,500", "RUN"] }
- * Envía cada línea al Arduino con un pequeño delay entre ellas.
- * Responde inmediatamente con { ok: true }; el resultado llega
- * por WebSocket cuando el Arduino responde DONE.
+ * Envía líneas de comandos al Arduino.
  */
 app.post('/send', (req, res) => {
   const lines = req.body.lines;
 
   if (!Array.isArray(lines) || lines.length === 0) {
-    return res.status(400).json({ error: 'Falta el campo "lines" (array de strings)' });
+    return res.status(400).json({
+      error: 'Falta el campo "lines" (array de strings)'
+    });
   }
 
   if (!serialPort || !serialPort.isOpen) {
-    return res.status(400).json({ error: 'No hay conexión activa. Conectá el Arduino primero.' });
+    return res.status(400).json({
+      error: 'No hay conexión activa. Conectá el Arduino primero.'
+    });
   }
 
-  // Validación básica: cada elemento debe ser un string no vacío
   for (const line of lines) {
     if (typeof line !== 'string' || line.trim() === '') {
-      return res.status(400).json({ error: `Línea inválida: ${JSON.stringify(line)}` });
+      return res.status(400).json({
+        error: `Línea inválida: ${JSON.stringify(line)}`
+      });
     }
   }
 
-  // Responder al browser de inmediato (el resultado llega por WebSocket)
-  res.json({ ok: true, count: lines.length });
+  res.json({
+    ok: true,
+    count: lines.length
+  });
 
-  // Enviar las líneas con delay para no saturar el buffer del Nano
   sendLinesWithDelay(lines, 0);
 });
 
-// Función auxiliar: enviar líneas de forma recursiva con delay
+// ─── Manejador de errores ─────────────────────────────────────
+
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    console.error('[JSON inválido]', err.message);
+
+    return res.status(400).json({
+      error: 'El cuerpo JSON enviado no es válido'
+    });
+  }
+
+  console.error('[Error del servidor]', err.message);
+
+  if (res.headersSent) {
+    return next(err);
+  }
+
+  res.status(500).json({
+    error: 'Error interno del servidor'
+  });
+});
+
+// ─── Envío serial ──────────────────────────────────────────────
+
 function sendLinesWithDelay(lines, index) {
   if (index >= lines.length) return;
 
-  const line = lines[index].trim();
-  console.log(`[→ Arduino] ${line}`);
-  serialPort.write(line + '\n');
+  if (!serialPort || !serialPort.isOpen) {
+    console.error('[Serial] Conexión perdida durante el envío');
+    broadcast('DISCONNECTED');
+    return;
+  }
 
-  setTimeout(() => {
-    sendLinesWithDelay(lines, index + 1);
-  }, LINE_DELAY_MS);
+  const line = lines[index].trim();
+
+  console.log(`[→ Arduino] ${line}`);
+
+  serialPort.write(line + '\n', (err) => {
+    if (err) {
+      console.error('[Serial write error]', err.message);
+      broadcast(`ERR ${err.message}`);
+      return;
+    }
+
+    setTimeout(() => {
+      sendLinesWithDelay(lines, index + 1);
+    }, LINE_DELAY_MS);
+  });
 }
 
-// ─── Iniciar servidor ─────────────────────────────────────────────────────────
+// ─── Iniciar servidor ─────────────────────────────────────────
 
 server.listen(PORT, () => {
   console.log('');

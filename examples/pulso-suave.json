@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "name": "Pulso suave",
+  "savedAt": "2026-11-17T10:00:00.000Z",
+  "steps": [
+    {
+      "kind": "S",
+      "params": {
+        "d1": 100,
+        "d2": 0,
+        "ms": 500
+      }
+    },
+    {
+      "kind": "S",
+      "params": {
+        "d1": 0,
+        "d2": 100,
+        "ms": 500
+      }
+    }
+  ]
+}
