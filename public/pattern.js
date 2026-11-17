@@ -1,47 +1,14 @@
+
 /**
- * pattern.js — Modelo de datos de VibeBrace Studio
- * 
+ * pattern.js - Modelo de datos de VibeBrace Studio
+ *
  * Funciones puras: no tocan el DOM, no llaman al servidor.
- * Convierten pasos (objetos JS) a líneas de texto que entiende el firmware.
- * 
- * Este archivo es el más importante del proyecto.
- * Cada función debe tener tests en pattern.test.js.
  */
 
 'use strict';
 
-// ─── Tipos ────────────────────────────────────────────────────────────────────
-//
-// Un paso tiene la forma:
-// {
-//   id:     string,         // identificador único (Date.now() + random)
-//   kind:   'S'|'RAMP'|'TREMOLO'|'XFADE',
-//   params: { [key]: number }
-// }
-//
-// Los nombres de los parámetros coinciden con los del formulario HTML.
+// ─── stepToSerial ─────────────────────────────────────────────
 
-// ─── stepToSerial ─────────────────────────────────────────────────────────────
-
-/**
- * Convierte un paso a la línea de texto que espera el firmware.
- * 
- * Ejemplos:
- *   stepToSerial({ kind: 'S',      params: { d1:200, d2:200, ms:500 } })
- *     → "S,200,200,500"
- * 
- *   stepToSerial({ kind: 'RAMP',   params: { m:3, d0:0, d1:200, ms:1000, steps:16 } })
- *     → "RAMP,3,0,200,1000,16"
- * 
- *   stepToSerial({ kind: 'TREMOLO', params: { m:1, base:120, depth:80, rate:5, ms:1000 } })
- *     → "TREMOLO,1,120,80,5,1000"
- * 
- *   stepToSerial({ kind: 'XFADE', params: { duty:200, ms:1000, steps:12 } })
- *     → "XFADE,200,1000,12"
- * 
- * @param {object} step
- * @returns {string}
- */
 function stepToSerial(step) {
   const p = step.params;
 
@@ -63,162 +30,160 @@ function stepToSerial(step) {
   }
 }
 
-// ─── patternToLines ───────────────────────────────────────────────────────────
+// ─── patternToLines ───────────────────────────────────────────
 
-/**
- * Convierte un array de pasos a un array de líneas listas para enviar.
- * Incluye CLR al inicio y RUN al final.
- * 
- * Ejemplo:
- *   patternToLines([
- *     { kind: 'S', params: { d1:200, d2:200, ms:500 } },
- *     { kind: 'S', params: { d1:0,   d2:0,   ms:200 } }
- *   ])
- *   → ["CLR", "S,200,200,500", "S,0,0,200", "RUN"]
- * 
- * @param {object[]} steps
- * @returns {string[]}
- */
 function patternToLines(steps) {
   const lines = ['CLR'];
+
   for (const step of steps) {
     lines.push(stepToSerial(step));
   }
+
   lines.push('RUN');
   return lines;
 }
 
-// ─── validateStep ─────────────────────────────────────────────────────────────
+// ─── validateStep ─────────────────────────────────────────────
 
-/**
- * Valida los parámetros de un paso.
- * Devuelve null si está bien, o un string con el mensaje de error.
- * 
- * @param {object} step
- * @returns {string|null}
- */
 function validateStep(step) {
+  if (!step || typeof step !== 'object' || Array.isArray(step)) {
+    return 'El paso debe ser un objeto válido';
+  }
+
+  if (!step.params || typeof step.params !== 'object' || Array.isArray(step.params)) {
+    return 'Faltan los parámetros del paso';
+  }
+
   const p = step.params;
 
-  // Helper: verificar que un valor está en rango [min, max]
   function inRange(val, min, max, name) {
-    const n = Number(val);
-    if (isNaN(n))           return `${name} debe ser un número`;
-    if (n < min || n > max) return `${name} debe estar entre ${min} y ${max} (recibido: ${n})`;
+    if (typeof val !== 'number' || !Number.isFinite(val)) {
+      return `${name} debe ser un número`;
+    }
+
+    if (val < min || val > max) {
+      return `${name} debe estar entre ${min} y ${max} (recibido: ${val})`;
+    }
+
     return null;
   }
 
   switch (step.kind) {
-    case 'S': {
+    case 'S':
       return inRange(p.d1, 0, 255, 'Motor 1')
           || inRange(p.d2, 0, 255, 'Motor 2')
           || inRange(p.ms, 5, 20000, 'Duración');
-    }
 
-    case 'RAMP': {
+    case 'RAMP':
       return inRange(p.m, 1, 3, 'Motor')
           || inRange(p.d0, 0, 255, 'Intensidad inicial')
           || inRange(p.d1, 0, 255, 'Intensidad final')
           || inRange(p.ms, 5, 20000, 'Duración')
           || inRange(p.steps, 2, 48, 'Pasos');
-    }
 
-    case 'TREMOLO': {
+    case 'TREMOLO':
       return inRange(p.m, 1, 3, 'Motor')
           || inRange(p.base, 0, 255, 'Base')
           || inRange(p.depth, 0, 255, 'Depth')
           || inRange(p.rate, 1, 50, 'Rate')
           || inRange(p.ms, 50, 5000, 'Duración');
-    }
 
-    case 'XFADE': {
+    case 'XFADE':
       return inRange(p.duty, 0, 255, 'Intensidad')
           || inRange(p.ms, 5, 20000, 'Duración')
           || inRange(p.steps, 2, 48, 'Pasos');
-    }
 
     default:
       return `Tipo desconocido: "${step.kind}"`;
   }
 }
 
-// ─── estimateDurationMs ───────────────────────────────────────────────────────
+// ─── estimateDurationMs ───────────────────────────────────────
 
-/**
- * Estima la duración total de un array de pasos en milisegundos.
- * Para RAMP y XFADE usa el parámetro ms directamente.
- * Para TREMOLO también.
- * 
- * @param {object[]} steps
- * @returns {number}
- */
 function estimateDurationMs(steps) {
-  return steps.reduce((total, step) => total + Number(step.params.ms || 0), 0);
+  return steps.reduce(
+    (total, step) => total + Number(step.params.ms || 0),
+    0
+  );
 }
 
-// ─── Guardar y cargar ─────────────────────────────────────────────────────────
+// ─── Guardar y cargar ─────────────────────────────────────────
 
-/**
- * Serializa un patrón a JSON string para guardar en archivo.
- * 
- * @param {string}   name
- * @param {object[]} steps
- * @returns {string}
- */
 function savePattern(name, steps) {
   const data = {
     version: 1,
-    name:    name || 'sin nombre',
+    name: name || 'sin nombre',
     savedAt: new Date().toISOString(),
-    steps:   steps
+    steps: steps
   };
+
   return JSON.stringify(data, null, 2);
 }
 
-/**
- * Parsea un JSON string y devuelve { name, steps }.
- * Lanza un Error si el formato es inválido.
- * 
- * @param {string} json
- * @returns {{ name: string, steps: object[] }}
- */
 function loadPattern(json) {
   let data;
+
   try {
     data = JSON.parse(json);
   } catch (e) {
     throw new Error('El archivo no es JSON válido');
   }
 
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error('El contenido del archivo no es válido');
+  }
+
   if (!Array.isArray(data.steps)) {
     throw new Error('El archivo no tiene un campo "steps" válido');
   }
 
-  return { name: data.name || 'importado', steps: data.steps };
+  const requiredParams = {
+    S: ['d1', 'd2', 'ms'],
+    RAMP: ['m', 'd0', 'd1', 'ms', 'steps'],
+    TREMOLO: ['m', 'base', 'depth', 'rate', 'ms'],
+    XFADE: ['duty', 'ms', 'steps']
+  };
+
+  data.steps.forEach((step, index) => {
+    if (!step || typeof step !== 'object' || Array.isArray(step)) {
+      throw new Error(`Paso ${index + 1}: formato inválido`);
+    }
+
+    if (!requiredParams[step.kind]) {
+      throw new Error(`Paso ${index + 1}: tipo desconocido`);
+    }
+
+    if (!step.params || typeof step.params !== 'object' || Array.isArray(step.params)) {
+      throw new Error(`Paso ${index + 1}: faltan los parámetros`);
+    }
+
+    for (const param of requiredParams[step.kind]) {
+      if (!Number.isFinite(step.params[param])) {
+        throw new Error(`Paso ${index + 1}: parámetro "${param}" inválido`);
+      }
+    }
+
+    const error = validateStep(step);
+
+    if (error) {
+      throw new Error(`Paso ${index + 1}: ${error}`);
+    }
+  });
+
+  return {
+    name: data.name || 'importado',
+    steps: data.steps
+  };
 }
 
-// ─── Helpers internos ─────────────────────────────────────────────────────────
+// ─── Helpers internos ─────────────────────────────────────────
 
-/**
- * Genera un ID único para un paso.
- * @returns {string}
- */
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
-/**
- * Lee los parámetros del formulario HTML para el tipo de paso seleccionado.
- * Devuelve un objeto { kind, params } listo para usar.
- * 
- * Esta función es el puente entre el formulario y el modelo de datos.
- * Depende del DOM — solo llamar desde editor.js, no testear directamente.
- * 
- * @returns {{ kind: string, params: object }}
- */
 function readFormParams() {
   const kind = document.getElementById('stepKind').value;
-
   const num = (id) => Number(document.getElementById(id).value);
 
   switch (kind) {
@@ -237,4 +202,43 @@ function readFormParams() {
     default:
       throw new Error(`Tipo desconocido: "${kind}"`);
   }
+}
+
+// ─── Exportación Arduino ───────────────────────────────────────
+
+function patternToArduinoCode(name, steps) {
+  if (!Array.isArray(steps)) {
+    throw new Error('Los pasos deben ser un array');
+  }
+
+  const safeName = String(name || 'Sin nombre')
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/[\r\n]/g, ' ');
+
+  const commands = patternToLines(steps);
+  const duration = estimateDurationMs(steps);
+  const lines = [];
+
+  lines.push(`// Patrón: "${safeName}"`);
+  lines.push('// Generado por VibeBrace Studio');
+  lines.push('');
+  lines.push('void setup() {');
+  lines.push('  Serial.begin(115200);');
+  lines.push('}');
+  lines.push('');
+  lines.push('void loop() {');
+  lines.push('  // Enviar secuencia');
+
+  for (const command of commands) {
+    lines.push(`  Serial.println("${command}");`);
+    lines.push('  delay(20);');
+  }
+
+  lines.push('');
+  lines.push(`  // Esperar a que termine (estimado: ${duration} ms)`);
+  lines.push(`  delay(${duration + 200});`);
+  lines.push('}');
+
+  return lines.join('\n') + '\n';
 }
